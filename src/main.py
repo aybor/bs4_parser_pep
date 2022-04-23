@@ -6,8 +6,7 @@ import requests_cache
 from bs4 import BeautifulSoup
 from tqdm import tqdm
 
-from constants import BASE_DIR, MAIN_DOC_URL
-from configs import configure_argument_parser
+from constants import BASE_DIR, MAIN_DOC_URL, PEP_URL, EXPECTED_STATUS
 from outputs import control_output
 
 from configs import configure_argument_parser, configure_logging
@@ -21,10 +20,10 @@ def whats_new(session):
         return
 
     soup = BeautifulSoup(response.text, features='lxml')
-    main_div = find_tag(soup, 'div', attrs={'id': 'what-s-new-in-python'})
+    main_div = find_tag(soup, 'section', attrs={'id': 'what-s-new-in-python'})
     div_with_ul = find_tag(main_div, 'div', attrs={'class': 'toctree-wrapper'})
     sections_by_python = div_with_ul.find_all('li', attrs={'class': 'toctree-l1'})
-    results = [('Ссылка на статью', 'Заголовок', 'Редактор, автор')]
+    results = [('Ссылка на статью', 'Заголовок', 'Редактор, Автор')]
     for section in tqdm(sections_by_python):
         version_a_tag = section.find('a')
         href = version_a_tag['href']
@@ -77,32 +76,84 @@ def download(session):
     downloads_dir = BASE_DIR / 'downloads'
     downloads_dir.mkdir(exist_ok=True)
 
-    if __name__ == '__main__':
-        response = get_response(session, downloads_url)
-        if response is None:
-            return
+    response = get_response(session, downloads_url)
+    if response is None:
+        return
+    soup = BeautifulSoup(response.text, features='lxml')
+
+    main_tag = find_tag(soup, 'div', {'role': 'main'})
+    table_tag = find_tag(main_tag, 'table', {'class': 'docutils'})
+
+    pdf_a4_tag = find_tag(table_tag, 'a', {'href': re.compile(r'.+pdf-a4\.zip$')})
+    pdf_a4_link = pdf_a4_tag['href']
+    archive_url = urljoin(downloads_url, pdf_a4_link)
+    filename = archive_url.split('/')[-1]
+    archive_path = downloads_dir / filename
+
+    response = session.get(archive_url)
+    with open(archive_path, 'wb') as file:
+        file.write(response.content)
+
+    logging.info(f'Архив был загружен и сохранён: {archive_path}')
+
+
+def pep(session):
+    response = get_response(session, PEP_URL)
+    if response is None:
+        return
+    soup = BeautifulSoup(response.text, features='lxml')
+    numerical_index_table = find_tag(soup, 'section', attrs={'id': 'numerical-index'})
+    table_body = find_tag(numerical_index_table, 'tbody')
+    rows = table_body.find_all('tr')
+    info = []
+    result_dic = {}
+
+    for row in tqdm(rows):
+        type_status_literals = find_tag(row, 'td').text
+        if len(type_status_literals) > 1:
+            status_literal = type_status_literals[1]
+        else:
+            status_literal = ''
+
+        expected_status = EXPECTED_STATUS[status_literal]
+
+        link = urljoin(PEP_URL, find_tag(row, 'a')['href'])
+        response = get_response(session, link)
         soup = BeautifulSoup(response.text, features='lxml')
+        table = find_tag(soup, 'dl', attrs={'class': 'rfc2822 field-list simple'})
+        fields = table.find_all('dt')
+        field_values = table.find_all('dd')
+        actual_status = ''
+        for i in range(len(fields)):
 
-        main_tag = find_tag(soup, 'div', {'role': 'main'})
-        table_tag = find_tag(main_tag, 'table', {'class': 'docutils'})
+            if fields[i].text == 'Status':
+                actual_status = field_values[i].text
+        if actual_status not in expected_status:
+            logging.info(
+                f'''
+Несовпадающие статусы:
+{link}
+Статус в карточке: {actual_status}
+Ожидаемые статусы: {expected_status}
+'''
+            )
+        if actual_status in result_dic.keys():
+            result_dic[actual_status] += 1
+        else:
+            result_dic[actual_status] = 1
+    results = [('Статус', 'Количество')]
+    for status, qty in result_dic.items():
+        results.append((status, qty))
+    results.append(('Total', sum(result_dic.values())))
 
-        pdf_a4_tag = find_tag(table_tag, 'a', {'href': re.compile(r'.+pdf-a4\.zip$')})
-        pdf_a4_link = pdf_a4_tag['href']
-        archive_url = urljoin(downloads_url, pdf_a4_link)
-        filename = archive_url.split('/')[-1]
-        archive_path = downloads_dir / filename
-
-        response = session.get(archive_url)
-        with open(archive_path, 'wb') as file:
-            file.write(response.content)
-
-        logging.info(f'Архив был загружен и сохранён: {archive_path}')
+    return results
 
 
 MODE_TO_FUNCTION = {
     'whats-new': whats_new,
     'latest-versions': latest_versions,
     'download': download,
+    'pep': pep,
 }
 
 
