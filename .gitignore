@@ -145,5 +145,4 @@ dmypy.json
 
 .mypy_cache
 http_cache.sqlite
-downloads/
 logs/

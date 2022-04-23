@@ -1,28 +1,29 @@
-import re
 import logging
+import re
 from urllib.parse import urljoin
 
 import requests_cache
 from bs4 import BeautifulSoup
 from tqdm import tqdm
 
-from constants import BASE_DIR, MAIN_DOC_URL, PEP_URL, EXPECTED_STATUS
-from outputs import control_output
-
 from configs import configure_argument_parser, configure_logging
-from utils import get_response, find_tag
+from constants import BASE_DIR, EXPECTED_STATUS, MAIN_DOC_URL, PEP_URL
+from outputs import control_output
+from utils import find_tag, get_response
 
 
 def whats_new(session):
     whats_new_url = urljoin(MAIN_DOC_URL, 'whatsnew/')
     response = get_response(session, whats_new_url)
     if response is None:
-        return
+        return []
 
     soup = BeautifulSoup(response.text, features='lxml')
     main_div = find_tag(soup, 'section', attrs={'id': 'what-s-new-in-python'})
     div_with_ul = find_tag(main_div, 'div', attrs={'class': 'toctree-wrapper'})
-    sections_by_python = div_with_ul.find_all('li', attrs={'class': 'toctree-l1'})
+    sections_by_python = div_with_ul.find_all(
+        'li', attrs={'class': 'toctree-l1'}
+    )
     results = [('Ссылка на статью', 'Заголовок', 'Редактор, Автор')]
     for section in tqdm(sections_by_python):
         version_a_tag = section.find('a')
@@ -30,7 +31,7 @@ def whats_new(session):
         version_link = urljoin(whats_new_url, href)
         response = get_response(session, version_link)
         if response is None:
-            return
+            return []
         soup = BeautifulSoup(response.text, features='lxml')
         h1 = find_tag(soup, 'h1')
         dl = find_tag(soup, 'dl')
@@ -43,7 +44,7 @@ def whats_new(session):
 def latest_versions(session):
     response = get_response(session, MAIN_DOC_URL)
     if response is None:
-        return
+        return []
     soup = BeautifulSoup(response.text, features='lxml')
 
     sidebar = find_tag(soup, 'div', attrs={'class': 'sphinxsidebarwrapper'})
@@ -84,7 +85,9 @@ def download(session):
     main_tag = find_tag(soup, 'div', {'role': 'main'})
     table_tag = find_tag(main_tag, 'table', {'class': 'docutils'})
 
-    pdf_a4_tag = find_tag(table_tag, 'a', {'href': re.compile(r'.+pdf-a4\.zip$')})
+    pdf_a4_tag = find_tag(
+        table_tag, 'a', {'href': re.compile(r'.+pdf-a4\.zip$')}
+    )
     pdf_a4_link = pdf_a4_tag['href']
     archive_url = urljoin(downloads_url, pdf_a4_link)
     filename = archive_url.split('/')[-1]
@@ -100,34 +103,34 @@ def download(session):
 def pep(session):
     response = get_response(session, PEP_URL)
     if response is None:
-        return
+        return []
     soup = BeautifulSoup(response.text, features='lxml')
-    numerical_index_table = find_tag(soup, 'section', attrs={'id': 'numerical-index'})
+    numerical_index_table = find_tag(
+        soup, 'section', attrs={'id': 'numerical-index'}
+    )
     table_body = find_tag(numerical_index_table, 'tbody')
     rows = table_body.find_all('tr')
-    info = []
-    result_dic = {}
 
+    result_dic = {}
     for row in tqdm(rows):
         type_status_literals = find_tag(row, 'td').text
-        if len(type_status_literals) > 1:
-            status_literal = type_status_literals[1]
-        else:
-            status_literal = ''
-
+        status_literal = type_status_literals[1:]
         expected_status = EXPECTED_STATUS[status_literal]
 
         link = urljoin(PEP_URL, find_tag(row, 'a')['href'])
         response = get_response(session, link)
         soup = BeautifulSoup(response.text, features='lxml')
-        table = find_tag(soup, 'dl', attrs={'class': 'rfc2822 field-list simple'})
+        table = find_tag(
+            soup, 'dl', attrs={'class': 'rfc2822 field-list simple'}
+        )
         fields = table.find_all('dt')
         field_values = table.find_all('dd')
+
         actual_status = ''
         for i in range(len(fields)):
-
             if fields[i].text == 'Status':
                 actual_status = field_values[i].text
+
         if actual_status not in expected_status:
             logging.info(
                 f'''
@@ -137,6 +140,7 @@ def pep(session):
 Ожидаемые статусы: {expected_status}
 '''
             )
+
         if actual_status in result_dic.keys():
             result_dic[actual_status] += 1
         else:
