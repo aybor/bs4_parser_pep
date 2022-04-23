@@ -119,6 +119,8 @@ def pep(session):
 
         link = urljoin(PEP_URL, find_tag(row, 'a')['href'])
         response = get_response(session, link)
+        if response is None:
+            return []
         soup = BeautifulSoup(response.text, features='lxml')
         table = find_tag(
             soup, 'dl', attrs={'class': 'rfc2822 field-list simple'}
@@ -145,6 +147,7 @@ def pep(session):
             result_dic[actual_status] += 1
         else:
             result_dic[actual_status] = 1
+
     results = [('Статус', 'Количество')]
     for status, qty in result_dic.items():
         results.append((status, qty))

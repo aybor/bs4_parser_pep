@@ -10,13 +10,10 @@ from constants import BASE_DIR, DATETIME_FORMAT
 def control_output(results, cli_args):
     output = cli_args.output
     if output == 'pretty':
-        # Вывод данных в PrettyTable.
         pretty_output(results)
     elif output == 'file':
-        # Вывод данных в файл csv. Саму функцию напишем позже.
         file_output(results, cli_args)
     else:
-        # Вывод данных по умолчанию — в терминал построчно.
         default_output(results)
 
 
