@@ -6,3 +6,5 @@ paths =
 max-complexity = 10
 exclude =
   tests
+per-file-ignores =
+  src/main.py:R502

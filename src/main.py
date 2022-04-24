@@ -16,7 +16,7 @@ def whats_new(session):
     whats_new_url = urljoin(MAIN_DOC_URL, 'whatsnew/')
     response = get_response(session, whats_new_url)
     if response is None:
-        return []
+        return
 
     soup = BeautifulSoup(response.text, features='lxml')
     main_div = find_tag(soup, 'section', attrs={'id': 'what-s-new-in-python'})
@@ -29,9 +29,8 @@ def whats_new(session):
         version_a_tag = section.find('a')
         href = version_a_tag['href']
         version_link = urljoin(whats_new_url, href)
+
         response = get_response(session, version_link)
-        if response is None:
-            return []
         soup = BeautifulSoup(response.text, features='lxml')
         h1 = find_tag(soup, 'h1')
         dl = find_tag(soup, 'dl')
@@ -44,7 +43,7 @@ def whats_new(session):
 def latest_versions(session):
     response = get_response(session, MAIN_DOC_URL)
     if response is None:
-        return []
+        return
     soup = BeautifulSoup(response.text, features='lxml')
 
     sidebar = find_tag(soup, 'div', attrs={'class': 'sphinxsidebarwrapper'})
@@ -103,7 +102,7 @@ def download(session):
 def pep(session):
     response = get_response(session, PEP_URL)
     if response is None:
-        return []
+        return
     soup = BeautifulSoup(response.text, features='lxml')
     numerical_index_table = find_tag(
         soup, 'section', attrs={'id': 'numerical-index'}
@@ -118,9 +117,8 @@ def pep(session):
         expected_status = EXPECTED_STATUS[status_literal]
 
         link = urljoin(PEP_URL, find_tag(row, 'a')['href'])
+
         response = get_response(session, link)
-        if response is None:
-            return []
         soup = BeautifulSoup(response.text, features='lxml')
         table = find_tag(
             soup, 'dl', attrs={'class': 'rfc2822 field-list simple'}
